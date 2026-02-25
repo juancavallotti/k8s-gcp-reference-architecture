@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import {
+  CheckIcon,
   ClipboardDocumentIcon,
   PencilSquareIcon,
   TrashIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { deleteContactAction, updateContactAction } from "@/actions/contacts";
 import type { Contact } from "@/domain/contact";
@@ -17,7 +19,12 @@ import {
   buildContactEmailClipboardText,
   formatUsPhoneNumber,
 } from "@/shared/contacts/contact-formatters";
-import { validateContactInput } from "@/shared/contacts/contact-validation";
+import {
+  contactEmailSchema,
+  contactNameSchema,
+  contactPhoneSchema,
+  validateContactInput,
+} from "@/shared/contacts/contact-validation";
 
 interface ContactListProps {
   contacts: Contact[];
@@ -39,8 +46,44 @@ function ContactListContent({ contacts }: ContactListProps) {
     email?: string;
     phone?: string;
   }>({});
+  const [editValues, setEditValues] = useState({
+    name: "",
+    email: "",
+    phone: "",
+  });
+  const [editTouched, setEditTouched] = useState({
+    name: false,
+    email: false,
+    phone: false,
+  });
   const [editFormError, setEditFormError] = useState<string | null>(null);
   const [clipboardStatus, setClipboardStatus] = useState<string | null>(null);
+
+  const validateEditField = (
+    field: "name" | "email" | "phone",
+    value: string
+  ): string | undefined => {
+    if (field === "name") {
+      const result = contactNameSchema.safeParse(value);
+      return result.success ? undefined : result.error.issues[0]?.message;
+    }
+    if (field === "email") {
+      const result = contactEmailSchema.safeParse(value);
+      return result.success ? undefined : result.error.issues[0]?.message;
+    }
+
+    const result = contactPhoneSchema.safeParse(value);
+    return result.success ? undefined : result.error.issues[0]?.message;
+  };
+
+  const handleEditFieldChange = (
+    field: "name" | "email" | "phone",
+    value: string
+  ) => {
+    setEditValues((prev) => ({ ...prev, [field]: value }));
+    setEditTouched((prev) => ({ ...prev, [field]: true }));
+    setEditErrors((prev) => ({ ...prev, [field]: validateEditField(field, value) }));
+  };
 
   if (contacts.length === 0) {
     return (
@@ -77,12 +120,20 @@ function ContactListContent({ contacts }: ContactListProps) {
 
               <button
                 type="button"
-                onClick={() =>
+                onClick={() => {
+                  setEditValues({
+                    name: contact.name,
+                    email: contact.email,
+                    phone: contact.phone,
+                  });
+                  setEditTouched({ name: false, email: false, phone: false });
+                  setEditErrors({});
+                  setEditFormError(null);
                   dispatch({
                     type: ContactListActionType.OPEN_EDIT_MODAL,
                     data: { contact },
-                  })
-                }
+                  });
+                }}
                 className="rounded-md p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
                 title="Edit contact"
                 aria-label={`Edit ${contact.name}`}
@@ -127,23 +178,20 @@ function ContactListContent({ contacts }: ContactListProps) {
                 onClick={() =>
                   dispatch({ type: ContactListActionType.CLOSE_EDIT_MODAL })
                 }
-                className="rounded-md px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-100"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-100"
               >
-                Close
+                <XMarkIcon className="h-4 w-4" />
+                <span>Close</span>
               </button>
             </div>
 
             <form
               action={async (formData) => {
-                const candidate = {
-                  name: String(formData.get("name") ?? ""),
-                  email: String(formData.get("email") ?? ""),
-                  phone: String(formData.get("phone") ?? ""),
-                };
-                const validated = validateContactInput(candidate);
+                const validated = validateContactInput(editValues);
                 if (!validated.success) {
                   setEditErrors(validated.errors);
                   setEditFormError("Please fix validation errors.");
+                  setEditTouched({ name: true, email: true, phone: true });
                   return;
                 }
 
@@ -160,12 +208,15 @@ function ContactListContent({ contacts }: ContactListProps) {
                 Name
                 <input
                   name="name"
-                  defaultValue={selected.name}
+                  value={editValues.name}
+                  onChange={(event) =>
+                    handleEditFieldChange("name", event.target.value)
+                  }
                   required
                   maxLength={120}
                   className="rounded-md border border-zinc-300 px-3 py-2 outline-none ring-zinc-900/20 focus:ring"
                 />
-                {editErrors.name ? (
+                {editTouched.name && editErrors.name ? (
                   <span className="text-xs text-red-600">{editErrors.name}</span>
                 ) : null}
               </label>
@@ -175,12 +226,15 @@ function ContactListContent({ contacts }: ContactListProps) {
                 <input
                   name="email"
                   type="email"
-                  defaultValue={selected.email}
+                  value={editValues.email}
+                  onChange={(event) =>
+                    handleEditFieldChange("email", event.target.value)
+                  }
                   required
                   maxLength={255}
                   className="rounded-md border border-zinc-300 px-3 py-2 outline-none ring-zinc-900/20 focus:ring"
                 />
-                {editErrors.email ? (
+                {editTouched.email && editErrors.email ? (
                   <span className="text-xs text-red-600">{editErrors.email}</span>
                 ) : null}
               </label>
@@ -189,12 +243,15 @@ function ContactListContent({ contacts }: ContactListProps) {
                 Phone
                 <input
                   name="phone"
-                  defaultValue={selected.phone}
+                  value={editValues.phone}
+                  onChange={(event) =>
+                    handleEditFieldChange("phone", event.target.value)
+                  }
                   required
                   maxLength={20}
                   className="rounded-md border border-zinc-300 px-3 py-2 outline-none ring-zinc-900/20 focus:ring"
                 />
-                {editErrors.phone ? (
+                {editTouched.phone && editErrors.phone ? (
                   <span className="text-xs text-red-600">{editErrors.phone}</span>
                 ) : null}
               </label>
@@ -208,15 +265,17 @@ function ContactListContent({ contacts }: ContactListProps) {
                   onClick={() =>
                     dispatch({ type: ContactListActionType.CLOSE_EDIT_MODAL })
                   }
-                  className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+                  className="inline-flex items-center gap-1 rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
                 >
-                  Cancel
+                  <XMarkIcon className="h-4 w-4" />
+                  <span>Cancel</span>
                 </button>
                 <button
                   type="submit"
-                  className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+                  className="inline-flex items-center gap-1 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
                 >
-                  Save changes
+                  <CheckIcon className="h-4 w-4" />
+                  <span>Save changes</span>
                 </button>
               </div>
             </form>
