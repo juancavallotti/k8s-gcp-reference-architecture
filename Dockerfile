@@ -13,7 +13,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV DATABASE_URL=file:./prisma/data/contacts.db
+ENV DATABASE_URL=file:./data/contacts.db
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
