@@ -1,0 +1,11 @@
+.git
+.gitignore
+.next
+node_modules
+npm-debug.log
+Dockerfile
+README.md
+.env
+.env.local
+prisma/data/*.db
+prisma/data/*.db-journal

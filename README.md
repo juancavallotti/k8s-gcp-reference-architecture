@@ -1,36 +1,93 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Contacts DB Sample
 
-## Getting Started
+Next.js 16 + Tailwind CSS contacts CRUD app using:
 
-First, run the development server:
+- server actions (no API routes)
+- SQLite with Prisma
+- 3-layer architecture:
+  - Presentation: `src/app`, `src/components`, `src/actions`
+  - Application: `src/application`
+  - Persistence: `src/persistence`
+
+Contacts fields:
+
+- `name`
+- `phone`
+- `email`
+
+## Local setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Configure environment:
+
+```bash
+cp .env.example .env
+```
+
+3. Create/update database and Prisma client:
+
+```bash
+npm run db:migrate -- --name init
+```
+
+4. Run the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Validation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Run lint:
 
-## Learn More
+```bash
+npm run lint
+```
 
-To learn more about Next.js, take a look at the following resources:
+Run production build:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Docker
 
-## Deploy on Vercel
+Build image:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+docker build -t contacts-db-sample .
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Run container:
+
+```bash
+docker run --rm -p 3000:3000 -v "$(pwd)/prisma/data:/app/prisma/data" contacts-db-sample
+```
+
+The container starts by running `prisma migrate deploy`, then starts Next.js.
+
+## GitHub repository
+
+Target remote:
+
+```bash
+git@github.com:juancavallotti/contacts-db-sample.git
+```
+
+Suggested push flow:
+
+```bash
+git init
+git remote add origin git@github.com:juancavallotti/contacts-db-sample.git
+git add .
+git commit -m "feat: create contacts CRUD app with Next.js, server actions and SQLite"
+git branch -M main
+git push -u origin main
+```
