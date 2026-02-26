@@ -23,11 +23,13 @@ flowchart LR
   buildStep --> pushStep["Push image to Artifact Registry"]
   pushStep --> getCreds["Get GKE credentials"]
   getCreds --> applyOverlay["kubectl apply -k k8s/overlays/<env>"]
-  applyOverlay --> setImage["kubectl set image deployment/contacts :SHORT_SHA"]
-  setImage --> runMigration["Run Job contacts-migration"]
+  applyOverlay --> reapplyImage["kustomize + sed replace image + kubectl apply"]
+  reapplyImage --> runMigration["Delete job, re-apply Job with built image, suspend=false"]
   runMigration --> waitMigration["kubectl wait job/contacts-migration complete"]
   waitMigration --> rollout["kubectl rollout status deployment/contacts"]
 ```
+
+**Migration job and immutability:** A Kubernetes Job’s `spec.template` is immutable after creation. The pipeline therefore does not use `kubectl set image` for the migration job. It deletes the existing job (if any), then applies the overlay again with the built image substituted into the manifests (via `kubectl kustomize` + `sed`), so the job is created once with the correct image. Deployment image updates still work via the same re-apply.
 
 ## Kustomize Layering
 

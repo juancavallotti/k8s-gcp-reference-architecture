@@ -37,16 +37,16 @@ steps:
       - CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER_NAME}
 
   - id: run-migration
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: /bin/sh
+    name: gcr.io/cloud-builders/kubectl
     args:
+      - /bin/sh
       - -c
-      - >
-        kubectl delete job contacts-migration --ignore-not-found=true &&
-        kubectl apply -k ${_K8S_OVERLAY_PATH} &&
-        kubectl set image deployment/contacts contacts=${_ARTIFACT_REPO_PATH}/${_IMAGE_NAME}:${SHORT_SHA} &&
-        kubectl set image job/contacts-migration migration=${_ARTIFACT_REPO_PATH}/${_IMAGE_NAME}:${SHORT_SHA} &&
-        kubectl patch job contacts-migration --type=merge -p '{"spec":{"suspend":false}}' &&
+      - |
+        kubectl delete job contacts-migration --ignore-not-found=true
+        IMAGE="${_ARTIFACT_REPO_PATH}/${_IMAGE_NAME}:${SHORT_SHA}"
+        BASE_IMAGE="us-west1-docker.pkg.dev/juancavallotti/eetr-artifacts/contacts-db-sample:latest"
+        kubectl kustomize ${_K8S_OVERLAY_PATH} | sed "s|${BASE_IMAGE}|${IMAGE}|g" | kubectl apply -f -
+        kubectl patch job contacts-migration --type=merge -p '{"spec":{"suspend":false}}'
         kubectl wait --for=condition=complete job/contacts-migration --timeout=300s
     env:
       - CLOUDSDK_COMPUTE_REGION=${_CLUSTER_REGION}
