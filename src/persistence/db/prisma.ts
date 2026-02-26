@@ -1,20 +1,35 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient as PostgresPrismaClient } from "@/generated/prisma-postgres";
+import { PrismaClient as SqlitePrismaClient } from "@/generated/prisma-sqlite";
+import { resolveActiveDatabaseConfig } from "@/persistence/db/config";
+
+export type AppPrismaClient = SqlitePrismaClient | PostgresPrismaClient;
 
 const globalForPrisma = globalThis as unknown as {
-  prisma?: PrismaClient;
+  prisma?: AppPrismaClient;
   didLogDatabaseUrl?: boolean;
 };
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+const activeDatabase = resolveActiveDatabaseConfig();
+
+function createPrismaClient(): AppPrismaClient {
+  if (activeDatabase.engine === "postgres") {
+    return new PostgresPrismaClient({
+      datasources: { db: { url: activeDatabase.url } },
+      log: ["error", "warn"],
+    });
+  }
+
+  return new SqlitePrismaClient({
+    datasources: { db: { url: activeDatabase.url } },
     log: ["error", "warn"],
   });
+}
+
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
 if (!globalForPrisma.didLogDatabaseUrl) {
-  const databaseUrl = process.env.DATABASE_URL ?? "<undefined>";
   console.log(
-    `[startup] NODE_ENV=${process.env.NODE_ENV ?? "unknown"} cwd=${process.cwd()} DATABASE_URL=${databaseUrl}`
+    `[startup] NODE_ENV=${process.env.NODE_ENV ?? "unknown"} cwd=${process.cwd()} APP_DB_ENGINE=${activeDatabase.engine} ${activeDatabase.sourceEnvKey}=${activeDatabase.url}`
   );
   globalForPrisma.didLogDatabaseUrl = true;
 }

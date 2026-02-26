@@ -8,9 +8,15 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy"
+    "db:generate": "npm run db:generate:sqlite && npm run db:generate:postgres",
+    "db:generate:sqlite": "prisma generate --schema prisma/sqlite/schema.prisma",
+    "db:generate:postgres": "prisma generate --schema prisma/postgres/schema.prisma",
+    "db:migrate": "npm run db:migrate:sqlite",
+    "db:migrate:sqlite": "prisma migrate dev --schema prisma/sqlite/schema.prisma",
+    "db:migrate:postgres": "prisma migrate dev --schema prisma/postgres/schema.prisma",
+    "db:deploy": "npm run db:deploy:sqlite",
+    "db:deploy:sqlite": "prisma migrate deploy --schema prisma/sqlite/schema.prisma",
+    "db:deploy:postgres": "prisma migrate deploy --schema prisma/postgres/schema.prisma"
   },
   "dependencies": {
     "@eetr/react-reducer-utils": "^0.1.1",

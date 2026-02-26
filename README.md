@@ -3,7 +3,7 @@
 Next.js 16 + Tailwind CSS contacts CRUD app using:
 
 - server actions (no API routes)
-- SQLite with Prisma
+- SQLite or Postgres with Prisma
 - 3-layer architecture:
   - Presentation: `src/app`, `src/components`, `src/actions`
   - Application: `src/application`
@@ -29,10 +29,17 @@ npm install
 cp .env.example .env
 ```
 
-3. Create/update database and Prisma client:
+Key env vars:
+
+- `APP_DB_ENGINE=sqlite|postgres`
+- `SQLITE_DATABASE_URL` for local SQLite
+- `POSTGRES_DATABASE_URL` for PostgreSQL deployments
+
+3. Create/update SQLite database and Prisma clients:
 
 ```bash
 npm run db:migrate -- --name init
+npm run db:generate
 ```
 
 4. Run the app:
@@ -72,6 +79,13 @@ docker run --rm -p 3000:3000 -v "$(pwd)/prisma/data:/app/prisma/data" contacts-d
 ```
 
 The container starts by running `prisma migrate deploy`, then starts Next.js.
+
+Use Postgres in Docker/K8s by overriding env vars:
+
+```bash
+-e APP_DB_ENGINE=postgres \
+-e POSTGRES_DATABASE_URL="postgresql://postgres:example@postgres-rw:5432/postgres?schema=public"
+```
 
 ## GitHub repository
 

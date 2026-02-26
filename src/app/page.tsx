@@ -1,12 +1,13 @@
 import { listContactsAction } from "@/actions/contacts";
 import { ContactForm } from "@/components/contacts/contact-form";
 import { ContactList } from "@/components/contacts/contact-list";
+import { resolveActiveDatabaseConfig } from "@/persistence/db/config";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const contacts = await listContactsAction();
-  const databaseUrl = process.env.DATABASE_URL ?? "<undefined>";
+  const activeDatabase = resolveActiveDatabaseConfig();
 
   return (
     <main className="min-h-screen bg-zinc-100 px-4 py-10">
@@ -17,7 +18,7 @@ export default async function Home() {
             Next.js server actions, SQLite, and layered architecture.
           </p>
           <p className="mt-1 font-mono text-xs text-zinc-500">
-            DB: {databaseUrl}
+            DB ({activeDatabase.engine}): {activeDatabase.url}
           </p>
         </header>
         <ContactForm />

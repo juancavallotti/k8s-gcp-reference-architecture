@@ -5,7 +5,7 @@ import type {
   CreateContactInput,
   UpdateContactInput,
 } from "@/domain/contact";
-import { prisma } from "@/persistence/db/prisma";
+import { db } from "@/persistence/db/client";
 import { persistenceLogger } from "@/persistence/logger";
 
 function mapToDomainContact(contact: {
@@ -26,10 +26,10 @@ function mapToDomainContact(contact: {
   };
 }
 
-export class SqliteContactRepository implements ContactRepository {
+export class PrismaContactRepository implements ContactRepository {
   async list(): Promise<Contact[]> {
     persistenceLogger.info("list contacts");
-    const contacts = await prisma.contact.findMany({
+    const contacts = await db.contact.findMany({
       orderBy: { createdAt: "desc" },
     });
     return contacts.map(mapToDomainContact);
@@ -37,13 +37,13 @@ export class SqliteContactRepository implements ContactRepository {
 
   async getById(id: ContactId): Promise<Contact | null> {
     persistenceLogger.info("get contact by id", { id });
-    const contact = await prisma.contact.findUnique({ where: { id } });
+    const contact = await db.contact.findUnique({ where: { id } });
     return contact ? mapToDomainContact(contact) : null;
   }
 
   async create(input: CreateContactInput): Promise<Contact> {
     persistenceLogger.info("create contact", { email: input.email });
-    const contact = await prisma.contact.create({
+    const contact = await db.contact.create({
       data: {
         name: input.name,
         email: input.email,
@@ -55,13 +55,13 @@ export class SqliteContactRepository implements ContactRepository {
 
   async update(id: ContactId, input: UpdateContactInput): Promise<Contact | null> {
     persistenceLogger.info("update contact", { id });
-    const existing = await prisma.contact.findUnique({ where: { id } });
+    const existing = await db.contact.findUnique({ where: { id } });
     if (!existing) {
       persistenceLogger.warn("update skipped, contact not found", { id });
       return null;
     }
 
-    const contact = await prisma.contact.update({
+    const contact = await db.contact.update({
       where: { id },
       data: {
         name: input.name,
@@ -75,7 +75,9 @@ export class SqliteContactRepository implements ContactRepository {
 
   async delete(id: ContactId): Promise<boolean> {
     persistenceLogger.info("delete contact", { id });
-    const result = await prisma.contact.deleteMany({ where: { id } });
+    const result = await db.contact.deleteMany({ where: { id } });
     return result.count > 0;
   }
 }
+
+export { PrismaContactRepository as SqliteContactRepository };

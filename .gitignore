@@ -44,5 +44,3 @@ next-env.d.ts
 prisma/data/*.db
 prisma/data/*.db-journal
 
-# prisma
-prisma/

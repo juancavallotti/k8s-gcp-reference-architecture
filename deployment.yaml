@@ -16,12 +16,10 @@ spec:
         - name: contacts
           image: contacts-db-sample
           imagePullPolicy: Never
-          volumeMounts:
-            - name: sqlite-storage
-              mountPath: /app/prisma/data
+          env:
+            - name: APP_DB_ENGINE
+              value: postgres
+            - name: POSTGRES_DATABASE_URL
+              value: postgresql://postgres:example@postgres-rw:5432/postgres?schema=public
       nodeSelector:
         kubernetes.io/hostname: minikube-m02
-      volumes:
-        - name: sqlite-storage
-          persistentVolumeClaim:
-            claimName: sqlite-pvc
