@@ -1,197 +1,147 @@
 # Kubernetes Concepts Used In This Repo
 
-This project deploys a Next.js app and a Postgres database into Kubernetes using manifest files and `kustomize`.
+This project deploys a Next.js contacts app into Kubernetes. It supports **three environments** (minikube, dev, prod) and **two deployment paths**: **Kustomize** (base + overlays) and **Helm** (one chart with env-specific values). Minikube and dev use SQLite with a PVC; prod uses Postgres with a StatefulSet. The database password secret (`contacts-db-secret`) is not in the repo—it is provisioned by Terraform for prod and consumed by the app and Postgres Pods.
 
-The manifests in `k8s/` are focused on workload and networking resources. The database password secret is expected to exist in the cluster as `contacts-db-secret` (for example, provisioned by Terraform), and is consumed by the app/database Pods.
+For deployment topology and CI/CD, see `DEPLOYMENT_ARCHITECTURE.md`. For step-by-step Minikube and GKE instructions, see `README.md`.
 
 ## 1) Kustomization (resource composition)
 
-Files: `kustomization.yaml`, `overlays/dev/kustomization.yaml`, `overlays/prod/kustomization.yaml`
-
-`Kustomization` is the entrypoint that bundles multiple manifests into one deployable set.
-
-- Root `k8s/kustomization.yaml` points to `overlays/prod` (default production apply target).
-- `overlays/dev` is a SQLite setup for local/dev clusters:
-  - app `Deployment` with `APP_DB_ENGINE=sqlite`
-  - `SQLITE_DATABASE_URL=file:../data/contacts.db`
-  - `sqlite-pvc` mounted at `/app/prisma/data`
-- `overlays/prod` contains the current Postgres-based setup (config map, services, stateful DB, app deployment, ingress, managed cert).
-- Typical usage:
+- **Base**: `k8s/base/kustomization.yaml` bundles the shared app resources: `contacts-service.yaml`, `deployment.yaml`, `migration-job.yaml`. No env-specific config here.
+- **Overlays**: `k8s/overlays/{minikube,dev,prod}/` each reference the base and add patches or extra resources:
+  - **minikube** and **dev**: Patch deployment (SQLite env + volume), service (NodePort or LoadBalancer), migration job; add `pvc.yaml` for SQLite. No Postgres, no Ingress.
+  - **prod**: Patch deployment (replicas, Postgres env from ConfigMap/Secret), migration job; add `db-configmap.yaml`, `service.yaml` (headless postgres), `postgres-service.yaml` (postgres-rw), `statefulset.yaml`, `ingress.yaml`, `managed-certificate.yaml`.
+- **Default apply target**: `k8s/kustomization.yaml` points to `overlays/prod`, so `kubectl apply -k k8s` deploys prod. To deploy a specific env, apply that overlay:
 
 ```bash
+kubectl apply -k k8s/overlays/minikube
 kubectl apply -k k8s/overlays/dev
 kubectl apply -k k8s/overlays/prod
 ```
 
+For minikube, use the helper scripts after building and loading the image: `./scripts/minikube-build-and-load.sh` then `./scripts/minikube-apply-and-migrate.sh` (Kustomize) or `./scripts/minikube-helm-apply-and-migrate.sh` (Helm).
+
 ## 2) Deployment (stateless app replicas)
 
-Files: `overlays/dev/deployment.yaml`, `overlays/prod/deployment.yaml` (resource name: `contacts`)
+**Files**: `k8s/base/deployment.yaml`; overlays use `deployment-patch.yaml` to add env vars, volumes, or replica counts.
 
-`Deployment` manages stateless app Pods and keeps the desired replica count running.
+`Deployment` manages the stateless Next.js app Pods.
 
-- `overlays/prod` uses `replicas: 3`; `overlays/dev` uses `replicas: 1`.
-- `selector.matchLabels` and Pod template `labels` (`app: contacts`) tie the Deployment to its Pods.
-- In prod, the container reads DB config from `ConfigMap` + `Secret`.
-- In dev, the container uses SQLite env vars directly (`APP_DB_ENGINE=sqlite`, `SQLITE_DATABASE_URL=file:../data/contacts.db`).
-- The image is pulled from Artifact Registry:
-  - `us-west1-docker.pkg.dev/juancavallotti/eetr-artifacts/contacts-db-sample:latest`
-- This manifest does not currently set `nodeSelector` or `imagePullPolicy`, so normal cluster scheduling and default image pull behavior apply.
-- The base deployment now defines:
-  - container port `3000` (named `http`)
-  - `startupProbe`, `readinessProbe`, and `livenessProbe` using `GET /api/healthcheck`
-  - probes validate end-to-end app functionality because the route performs a DB query (`contacts` ordered desc, `take: 1`)
+- **Base** defines: container port `3000` (named `http`), `startupProbe`, `readinessProbe`, and `livenessProbe` using `GET /api/healthcheck`, and the default image (Artifact Registry). Replicas default to `1`.
+- **Overlay patches**:
+  - minikube/dev: Add `APP_DB_ENGINE=sqlite`, `SQLITE_DATABASE_URL=file:../data/contacts.db`, volume mount for `sqlite-pvc` at `/app/prisma/data`.
+  - prod: Set `replicas: 3` and wire env from ConfigMap `contacts-db-config` and Secret `contacts-db-secret` to build `POSTGRES_DATABASE_URL`.
+- The image in the base is overridden at deploy time (e.g. by Cloud Build or the minikube scripts). No `nodeSelector` or custom `imagePullPolicy` in this repo.
 
 ## 2.1) Application health endpoint
 
-File: `src/app/api/healthcheck/route.ts`
+**File**: `src/app/api/healthcheck/route.ts`
 
-`GET /api/healthcheck` is used by Kubernetes probes and intentionally performs a real DB read:
+`GET /api/healthcheck` is used by Kubernetes probes and performs a real DB read:
 
-- Query behavior is equivalent to `SELECT * FROM contacts ORDER BY createdAt DESC LIMIT 1`.
-- Response returns `contacts` as a list (`[]` when empty, `[latestContact]` when rows exist).
-- Returns HTTP `200` on successful DB access and HTTP `500` when DB access fails.
+- Equivalent to `SELECT * FROM contacts ORDER BY createdAt DESC LIMIT 1`.
+- Returns `contacts` as a list (`[]` when empty, `[latestContact]` when rows exist). HTTP `200` on success, HTTP `500` on DB failure.
 
 ## 3) StatefulSet (stateful database workload)
 
-File: `overlays/prod/statefulset.yaml` (resource name: `postgres`)
+**File**: `k8s/overlays/prod/statefulset.yaml` (resource name: `postgres`). Only used in the prod overlay.
 
-`StatefulSet` is used for stateful services like databases that need stable identity and persistent storage.
+`StatefulSet` runs a single Postgres instance with stable identity and persistent storage.
 
-- `serviceName: postgres` connects the StatefulSet to the headless service.
-- `replicas: 1` runs a single Postgres instance.
-- The Pod gets `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` from Kubernetes config resources.
-- `volumeClaimTemplates` creates a per-Pod PersistentVolumeClaim named `data` and mounts it at `/var/lib/postgresql/data`.
+- `serviceName: postgres` ties it to the headless Service.
+- `replicas: 1`. Pod gets `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` from ConfigMap/Secret. `volumeClaimTemplates` creates a PVC named `data` mounted at `/var/lib/postgresql/data`.
 
 ## 4) Services (internal networking and discovery)
 
-Files: `overlays/dev/contacts-service.yaml`, `overlays/prod/contacts-service.yaml`, `overlays/prod/service.yaml`, `overlays/prod/postgres-service.yaml`
+**Files**: `k8s/base/contacts-service.yaml`; `k8s/overlays/dev/service-patch.yaml` and `k8s/overlays/minikube/service-patch.yaml` (change type); `k8s/overlays/prod/service.yaml` (headless postgres) and `k8s/overlays/prod/postgres-service.yaml` (postgres-rw).
 
-This repo uses two service patterns:
+- **App service `contacts`** (from base, patched in dev/minikube): selector `app: contacts`, port `80` → targetPort `3000`. In base it is ClusterIP; dev patches to LoadBalancer; minikube patches to NodePort. In prod it stays ClusterIP and is the backend for Ingress.
+- **Headless service `postgres`** (prod only): `clusterIP: None`, selector `app: postgres`, port `5432`. Gives stable DNS for StatefulSet Pods.
+- **Service `postgres-rw`** (prod only): ClusterIP, selector `app: postgres`, port `5432`. The app connects to Postgres via `DB_HOST=postgres-rw` from the ConfigMap.
 
-- App service `contacts` (port `80` -> targetPort `3000`)
-  - Exposes the Next.js Pods internally in the cluster.
-  - Used as the backend service for Ingress.
-- Headless service `postgres` (`clusterIP: None`)
-  - Used with the StatefulSet for stable DNS identity of stateful Pods.
-- Regular ClusterIP service `postgres-rw`
-  - Provides a stable virtual IP/DNS endpoint for clients to connect to Postgres.
-  - The app uses `DB_HOST=postgres-rw` from `ConfigMap`.
-
-Both services route traffic using `selector: app: postgres`.
+Traffic to the app uses `app: contacts`; traffic to Postgres uses `app: postgres`.
 
 ## 5) ConfigMap (non-secret configuration)
 
-File: `overlays/prod/db-configmap.yaml` (resource name: `contacts-db-config`)
+**File**: `k8s/overlays/prod/db-configmap.yaml` (resource name: `contacts-db-config`). Only in prod overlay.
 
-`ConfigMap` stores plain-text configuration data consumed by Pods.
-
-Values defined here include:
-
-- `APP_DB_ENGINE`
-- `DB_HOST`
-- `DB_PORT`
-- `DB_NAME`
-- `DB_SCHEMA`
-- `POSTGRES_USER`
-
-The app and database manifests consume these values with `configMapKeyRef`.
+Stores plain-text DB configuration: `APP_DB_ENGINE`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_SCHEMA`, `POSTGRES_USER`. Consumed by the app Deployment and the migration Job (and by the Postgres StatefulSet for non-secret fields). The app builds `POSTGRES_DATABASE_URL` from these plus the password from the Secret.
 
 ## 6) Secret (sensitive configuration)
 
-Resource: `contacts-db-secret` (consumed in `overlays/prod/deployment.yaml` and `overlays/prod/statefulset.yaml`)
+**Resource**: `contacts-db-secret` (consumed in prod deployment and migration job patches and in the Postgres StatefulSet). Not stored in `k8s/`—created by Terraform (`infra/terraform/kubernetes-secret.tf`) so credentials stay out of the repo.
 
-`Secret` stores sensitive values, in this case `POSTGRES_PASSWORD`.
-
-- It is injected into containers with `secretKeyRef`.
-- This keeps credentials out of plain-text config maps and app manifests.
-- A secret manifest file is not currently included in `k8s/`; the secret is expected to be created before applying workloads (for example by Terraform in `infra/terraform`).
+Contains `POSTGRES_PASSWORD`. Injected via `secretKeyRef`. For prod, ensure Terraform has been applied so the secret exists before applying the prod overlay.
 
 ## 7) Environment variable wiring
 
-Mainly in: `overlays/prod/deployment.yaml` and `overlays/dev/deployment.yaml`
+**Base**: `k8s/base/deployment.yaml` (no DB env in base). **Overlays**: `k8s/overlays/dev/deployment-patch.yaml`, `k8s/overlays/minikube/deployment-patch.yaml`, `k8s/overlays/prod/deployment-patch.yaml`.
 
-In prod, the app container combines values from config and secret into runtime env vars:
+- **minikube/dev**: Env set directly in the patch: `APP_DB_ENGINE=sqlite`, `SQLITE_DATABASE_URL=file:../data/contacts.db`.
+- **prod**: Env from ConfigMap and Secret; `POSTGRES_DATABASE_URL` is built from `postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?schema=$(DB_SCHEMA)`.
 
-- Individual fields (`DB_HOST`, `DB_PORT`, etc.) come from `ConfigMap`.
-- Password comes from `Secret`.
-- `POSTGRES_DATABASE_URL` is assembled from these variables:
+## 8) Persistent storage
 
-```text
-postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?schema=$(DB_SCHEMA)
-```
+**Files**: `k8s/overlays/prod/statefulset.yaml` (volumeClaimTemplates); `k8s/overlays/dev/pvc.yaml` and `k8s/overlays/minikube/pvc.yaml` (sqlite-pvc).
 
-This pattern decouples app image from environment-specific database endpoints. In dev, SQLite is configured directly in the deployment manifest.
+- **Prod**: Postgres data via StatefulSet `volumeClaimTemplates` (PVC `data`).
+- **Dev/minikube**: SQLite file in `sqlite-pvc` (e.g. 64Mi), mounted at `/app/prisma/data` in the app and migration Job.
 
-## 8) Persistent storage patterns in this repo
+## 9) Label selectors and routing
 
-Files: `overlays/prod/statefulset.yaml`, `overlays/dev/pvc.yaml`
+- **App**: `app: contacts` on Deployment and Pods; Service `contacts` selects by this label.
+- **Postgres** (prod): `app: postgres` on StatefulSet and Pods; Services `postgres` and `postgres-rw` select by this label.
 
-- Prod DB persistence is implemented with `StatefulSet.volumeClaimTemplates`.
-- Dev SQLite persistence is implemented with `sqlite-pvc` in `overlays/dev/pvc.yaml`, mounted by the dev app deployment.
+## 10) Helm chart (alternative to Kustomize)
 
-## 9) Label selectors and workload-to-service routing
+A Helm chart at `helm/contacts/` produces equivalent manifests for minikube, dev, and prod.
 
-A consistent `app` label ties objects together:
+- **Templates** in `helm/contacts/templates/` branch on `database.engine` (sqlite vs postgres) and `ingress.enabled`, mirroring overlay behavior.
+- **Values**: `values.yaml` (defaults), `values-minikube.yaml`, `values-dev.sample.yaml`, `values-prod.sample.yaml`. Gitignored `values-dev.yaml` and `values-prod.yaml` are for local/CI overrides.
+- **Usage**: e.g. `helm template contacts ./helm/contacts -f ./helm/contacts/values-minikube.yaml` to render; for minikube deploy, use `./scripts/minikube-helm-apply-and-migrate.sh` after `./scripts/minikube-build-and-load.sh`.
 
-- `Deployment` uses `app: contacts`
-- `StatefulSet` and DB services use `app: postgres`
-- Services select Pods by label, which is how Kubernetes routes traffic to the right workload.
+CI currently uses the Kustomize path; the Helm path is optional (see `cloudbuild.yaml`). Both paths should be kept in sync when changing manifests (see `.cursor/skills/kubernetes/SKILL.md`).
 
-## 10) Operational notes for this project
+## 11) Ingress and managed TLS (prod only)
 
-- Local default (`.env`) is SQLite (`APP_DB_ENGINE=sqlite`).
-- Kubernetes now has two overlays:
-  - `dev`: SQLite + PVC (no Postgres StatefulSet/Ingress resources).
-  - `prod`: Postgres + StatefulSet + ingress/certificate resources.
-- To run in Kubernetes, ensure the app image in the selected overlay deployment is available to cluster nodes.
-- Ensure `contacts-db-secret` exists in the target namespace before deploying app/database workloads.
-- The app-to-db dependency is represented through service DNS (`postgres-rw:5432`) rather than hardcoded Pod IPs.
-- The app now redacts DB credentials server-side before display/logging:
-  - UI prints a masked DB URL (password replaced with `***`).
-  - Startup logs also use the redacted URL.
-  - This avoids leaking raw credentials to browser responses and routine logs.
+**Files**: `k8s/overlays/prod/ingress.yaml`, `k8s/overlays/prod/managed-certificate.yaml`
 
-## 11) Ingress and managed TLS
+- **Ingress** `contacts-ingress`: routes `contacts.eetr.app` to Service `contacts` on port `80`. GCE annotations set ingress class, global static IP (`contacts-static-ip`), and managed certificate (`contacts-cert`).
+- **ManagedCertificate** `contacts-cert`: requests TLS for `contacts.eetr.app`. Provisioned by GKE.
 
-Files: `overlays/prod/ingress.yaml`, `overlays/prod/managed-certificate.yaml`
+## 12) Operational notes
 
-- `Ingress` (`contacts-ingress`) routes `contacts.eetr.app` to service `contacts` on port `80`.
-- GCE annotations configure:
-  - ingress class (`kubernetes.io/ingress.class: gce`)
-  - global static IP (`kubernetes.io/ingress.global-static-ip-name: contacts-static-ip`)
-  - managed certificate binding (`networking.gke.io/managed-certificates: contacts-cert`)
-- `ManagedCertificate` (`contacts-cert`) requests TLS cert provisioning for `contacts.eetr.app`.
+- **Environments**: minikube (SQLite, NodePort); dev (SQLite, LoadBalancer, no Ingress); prod (Postgres, ClusterIP, Ingress + cert). Terraform variable `deploy_environment` selects which overlay Cloud Build applies.
+- **Image**: Must be available to the cluster (e.g. loaded into minikube or in Artifact Registry). Minikube scripts use `IMAGE_NAME`/`IMAGE_TAG` (default `contacts-db-sample:local`).
+- **Migration Job**: Base defines `contacts-migration` (suspended by default). Overlays patch env/volumes. Job `spec.template` is immutable, so pipelines and scripts delete and re-apply the job with the desired image instead of `kubectl set image`. See `scripts/minikube-apply-and-migrate.sh` and `cloudbuild.yaml`.
+- **Secrets**: For prod, apply Terraform so `contacts-db-secret` exists before applying the prod overlay. The app redacts DB credentials in UI and logs (masked URL).
 
-## 12) Quick verification commands
-
-Use these to inspect what was applied and validate concept understanding:
+## 13) Quick verification commands
 
 ```bash
-# Apply dev or prod overlays
+# Render overlays (no apply)
+kubectl kustomize k8s/overlays/minikube
+kubectl kustomize k8s/overlays/dev
+kubectl kustomize k8s/overlays/prod
+
+# Or render Helm for an env
+helm template contacts ./helm/contacts -f ./helm/contacts/values-minikube.yaml
+
+# Apply an overlay (after image is available)
 kubectl apply -k k8s/overlays/dev
 kubectl apply -k k8s/overlays/prod
 
 # List main resources
-kubectl get deploy,statefulset,svc,configmap,secret,ingress,managedcertificate,pvc
+kubectl get deploy,statefulset,svc,job,configmap,ingress,managedcertificate,pvc
 
-# Render overlays without applying
-kubectl kustomize k8s/overlays/dev
-kubectl kustomize k8s/overlays/prod
-
-# Inspect app deployment config and env wiring
+# Inspect app deployment and env
 kubectl describe deployment contacts
 
-# Inspect postgres stateful workload and volume claims
+# Prod: Postgres and secret
 kubectl describe statefulset postgres
 kubectl get pvc
-
-# Check generated Pod names and labels
-kubectl get pods --show-labels
-
-# Confirm secret expected by workloads exists
 kubectl get secret contacts-db-secret
 
-# Verify ingress and certificate status
+# Ingress and certificate (prod)
 kubectl get ingress contacts-ingress
 kubectl get managedcertificate contacts-cert
 ```
