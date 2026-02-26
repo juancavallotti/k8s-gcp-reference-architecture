@@ -31,11 +31,6 @@ cat <<EOF
 Image is ready in minikube: ${IMAGE}
 
 Suggested next steps:
-  kubectl apply -k k8s/overlays/minikube
-  kubectl set image deployment/contacts contacts=${IMAGE}
-  kubectl set image job/contacts-migration migration=${IMAGE}
-  kubectl patch job contacts-migration --type=merge -p '{"spec":{"suspend":false}}'
-  kubectl wait --for=condition=complete job/contacts-migration --timeout=300s
-  kubectl rollout status deployment/contacts --timeout=300s
+  ./scripts/minikube-apply-and-migrate.sh
   minikube service contacts --url
 EOF

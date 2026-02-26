@@ -38,8 +38,8 @@ steps:
 
   - id: run-migration
     name: gcr.io/cloud-builders/kubectl
+    entrypoint: /bin/sh
     args:
-      - /bin/sh
       - -c
       - |
         kubectl delete job contacts-migration --ignore-not-found=true
