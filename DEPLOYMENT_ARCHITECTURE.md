@@ -15,7 +15,7 @@ This document describes how deployments work for both `dev` and `prod` in this r
 
 ```mermaid
 flowchart LR
-  gitPush["GitHub push to main"] --> cbTrigger["Cloud Build trigger (contacts-main-deploy)"]
+  gitPush["GitHub branch/tag push"] --> cbTrigger["Cloud Build trigger (contacts-<env>-deploy)"]
   cbTrigger --> buildStep["Build image (Docker)"]
   buildStep --> pushStep["Push image to Artifact Registry"]
   pushStep --> getCreds["Get GKE credentials"]
@@ -112,7 +112,7 @@ flowchart TB
 2. Apply Terraform in `infra/terraform`.
 3. Cloud Build trigger substitutions set:
    - `_K8S_OVERLAY_PATH = k8s/overlays/${deploy_environment}`
-4. On push to `main`, Cloud Build deploys that overlay.
+4. On matching branch/tag push events, Cloud Build deploys that overlay.
 
 ## Source References
 

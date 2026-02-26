@@ -1,16 +1,17 @@
 resource "google_cloudbuild_trigger" "main_push" {
   project         = var.project_id
-  name            = "contacts-main-deploy"
+  name            = "contacts-${var.deploy_environment}-deploy"
   service_account = google_service_account.cloudbuild_runner.id
 
-  description = "Build and deploy contacts app to GKE on main branch pushes."
+  description = "Build and deploy contacts app to GKE for ${var.deploy_environment}."
   filename    = "cloudbuild.yaml"
 
   github {
     owner = var.github_owner
     name  = var.github_repo
     push {
-      branch = var.trigger_branch_regex
+      branch = var.deploy_environment == "prod" ? null : var.trigger_branch_regex
+      tag    = var.deploy_environment == "prod" ? var.trigger_tag_regex : null
     }
   }
 

@@ -22,7 +22,9 @@ This repo includes Terraform to provision:
 
 - GKE Autopilot cluster
 - Dedicated Cloud Build runner service account and custom IAM role
-- Cloud Build trigger (push to `main`) that builds, pushes, and deploys
+- Cloud Build trigger (env-specific name) that builds, pushes, and deploys:
+  - `dev`: branch push trigger (default `^main$`)
+  - `prod`: tag push trigger (default `^v.*$`)
 
 Path:
 
@@ -43,6 +45,7 @@ Set at minimum:
 - `artifact_repo_path` (defaults to `us-west1-docker.pkg.dev/juancavallotti/eetr-artifacts`)
 - `cloud_build_runner_account_id` (service account id used by the trigger)
 - `deploy_environment` (`dev` or `prod`, selects `k8s/overlays/<environment>`)
+- `trigger_tag_regex` (tag regex used when `deploy_environment=prod`)
 - `db_password` (used by Terraform to create `contacts-db-secret` in the cluster)
 
 #### 2) Create infra
@@ -65,7 +68,7 @@ Terraform creates:
 
 #### 3) CI/CD flow
 
-On push to `main`, Cloud Build (`cloudbuild.yaml`) will:
+On matching GitHub push events, Cloud Build (`cloudbuild.yaml`) will:
 
 1. Build image: `${_ARTIFACT_REPO_PATH}/${_IMAGE_NAME}:${SHORT_SHA}`
 2. Push image to Artifact Registry
@@ -73,6 +76,15 @@ On push to `main`, Cloud Build (`cloudbuild.yaml`) will:
 4. `kubectl apply -k ${_K8S_OVERLAY_PATH}` (set by Terraform from `deploy_environment`)
 5. `kubectl set image deployment/contacts ...:${SHORT_SHA}`
 6. Wait for rollout success
+
+Trigger behavior by environment:
+
+- `deploy_environment=dev`:
+  - trigger name: `contacts-dev-deploy`
+  - source filter: `trigger_branch_regex`
+- `deploy_environment=prod`:
+  - trigger name: `contacts-prod-deploy`
+  - source filter: `trigger_tag_regex`
 
 #### 4) Verify deployment
 

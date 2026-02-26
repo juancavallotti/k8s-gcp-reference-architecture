@@ -51,6 +51,12 @@ variable "trigger_branch_regex" {
   default     = "^main$"
 }
 
+variable "trigger_tag_regex" {
+  description = "Regex for push tag filter used when deploy_environment is prod."
+  type        = string
+  default     = "^v.*$"
+}
+
 variable "deploy_environment" {
   description = "Kubernetes deployment environment. Valid values: dev or prod."
   type        = string
