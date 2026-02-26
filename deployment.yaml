@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: contacts
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: contacts
@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: contacts
-          image: contacts-db-sample
+          image: contacts-db-sample:latest
           imagePullPolicy: Never
           env:
             - name: APP_DB_ENGINE
