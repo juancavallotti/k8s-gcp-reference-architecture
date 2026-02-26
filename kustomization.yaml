@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - db-configmap.yaml
+  - db-secret.yaml
+  - service.yaml
+  - postgres-service.yaml
+  - statefulset.yaml
+  - deployment.yaml
