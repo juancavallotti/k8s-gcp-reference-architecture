@@ -1,4 +1,6 @@
-# Contacts DB Sample
+# GCP + K8s Reference Architectur
+
+## Sample App: Contacts Database
 
 Next.js 16 + Tailwind CSS contacts CRUD app using:
 
@@ -10,7 +12,6 @@ Next.js 16 + Tailwind CSS contacts CRUD app using:
   - Application: `src/application`
   - Persistence: `src/persistence`
 
-Want to work with me? [Call my agent](https://juancavallotti.com/ai-assistant).
 
 ## Prerequisites
 
@@ -350,3 +351,7 @@ git commit -m "feat: create contacts CRUD app with Next.js, server actions and S
 git branch -M main
 git push -u origin main
 ```
+
+### Contact
+
+Want to work with me? [Call my agent](https://juancavallotti.com/ai-assistant).
