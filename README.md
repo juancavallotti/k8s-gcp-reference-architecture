@@ -2,8 +2,11 @@
 
 ## Sample App: Contacts Database
 
-Next.js 16 + Tailwind CSS contacts CRUD app using:
+A simple contacts app to create, read, update, and delete contact entries. Each contact has **name**, **phone**, and **email**. The app demonstrates a production-ready stack and deployment patterns.
 
+**Tech and architecture:**
+
+- Next.js 16 + Tailwind CSS
 - server actions for CRUD flows
 - one API route for infrastructure health checks: `GET /api/healthcheck`
 - SQLite or Postgres with Prisma
@@ -149,14 +152,7 @@ Not deleted by this stack:
 
 Security note:
 
-- `db-secret.yaml` is not applied by kustomize anymore; the secret is managed by Terraform.
 - Keep Terraform state in a protected backend (for example, private GCS bucket with restricted IAM), because sensitive values can be represented in state.
-
-Contacts fields:
-
-- `name`
-- `phone`
-- `email`
 
 ## Local setup
 
