@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: contacts-db-config
+data:
+  APP_DB_ENGINE: "postgres"
+  DB_HOST: "postgres-rw"
+  DB_PORT: "5432"
+  DB_NAME: "contacts"
+  DB_SCHEMA: "public"
+  POSTGRES_USER: "postgres"
