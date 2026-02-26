@@ -16,5 +16,12 @@ spec:
         - name: contacts
           image: contacts-db-sample
           imagePullPolicy: Never
-          ports:
-            - containerPort: 3000   # adjust if needed
+          volumeMounts:
+            - name: sqlite-storage
+              mountPath: /app/prisma/data
+      nodeSelector:
+        kubernetes.io/hostname: minikube-m02
+      volumes:
+        - name: sqlite-storage
+          persistentVolumeClaim:
+            claimName: sqlite-pvc
