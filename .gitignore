@@ -46,6 +46,7 @@ prisma/data/*.db-journal
 
 # terraform
 **/.terraform/*
+**/.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
 *.tfvars

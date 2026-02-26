@@ -5,7 +5,7 @@ resource "kubernetes_secret_v1" "contacts_db_secret" {
 
   type = "Opaque"
 
-  string_data = {
+  data = {
     POSTGRES_PASSWORD = var.db_password
   }
 
