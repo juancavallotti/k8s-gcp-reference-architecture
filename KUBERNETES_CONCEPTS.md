@@ -2,6 +2,8 @@
 
 This project deploys a Next.js app and a Postgres database into Kubernetes using manifest files and `kustomize`.
 
+The manifests in `k8s/` are focused on workload and networking resources. The database password secret is expected to exist in the cluster as `contacts-db-secret` (for example, provisioned by Terraform), and is consumed by the app/database Pods.
+
 ## 1) Kustomization (resource composition)
 
 File: `kustomization.yaml`
@@ -24,8 +26,9 @@ File: `deployment.yaml` (resource name: `contacts`)
 - `replicas: 3` means Kubernetes schedules three app Pods.
 - `selector.matchLabels` and Pod template `labels` (`app: contacts`) tie the Deployment to its Pods.
 - The container reads database configuration from `ConfigMap` + `Secret`.
-- `imagePullPolicy: Never` is useful for local Minikube workflows where the image is built directly into the cluster node.
-- `nodeSelector` pins Pods to `minikube-m02`, which demonstrates scheduling constraints by node label.
+- The image is pulled from Artifact Registry:
+  - `us-west1-docker.pkg.dev/juancavallotti/eetr-artifacts/contacts-db-sample:latest`
+- This manifest does not currently set `nodeSelector` or `imagePullPolicy`, so normal cluster scheduling and default image pull behavior apply.
 
 ## 3) StatefulSet (stateful database workload)
 
@@ -40,10 +43,13 @@ File: `statefulset.yaml` (resource name: `postgres`)
 
 ## 4) Services (internal networking and discovery)
 
-Files: `service.yaml`, `postgres-service.yaml`
+Files: `contacts-service.yaml`, `service.yaml`, `postgres-service.yaml`
 
 This repo uses two service patterns:
 
+- App service `contacts` (port `80` -> targetPort `3000`)
+  - Exposes the Next.js Pods internally in the cluster.
+  - Used as the backend service for Ingress.
 - Headless service `postgres` (`clusterIP: None`)
   - Used with the StatefulSet for stable DNS identity of stateful Pods.
 - Regular ClusterIP service `postgres-rw`
@@ -71,13 +77,13 @@ The app and database manifests consume these values with `configMapKeyRef`.
 
 ## 6) Secret (sensitive configuration)
 
-File: `db-secret.yaml` (resource name: `contacts-db-secret`)
+Resource: `contacts-db-secret` (consumed in `deployment.yaml` and `statefulset.yaml`)
 
 `Secret` stores sensitive values, in this case `POSTGRES_PASSWORD`.
 
 - It is injected into containers with `secretKeyRef`.
 - This keeps credentials out of plain-text config maps and app manifests.
-- Current manifest uses `stringData`, which is convenient in development; production setups usually use external secret management and stricter handling.
+- A secret manifest file is not currently included in `k8s/`; the secret is expected to be created before applying workloads (for example by Terraform in `infra/terraform`).
 
 ## 7) Environment variable wiring
 
@@ -114,10 +120,26 @@ A consistent `app` label ties objects together:
 ## 10) Operational notes for this project
 
 - Local default (`.env`) is SQLite (`APP_DB_ENGINE=sqlite`), while Kubernetes manifests are wired for Postgres (`APP_DB_ENGINE=postgres` in `ConfigMap`).
-- To run in Kubernetes, ensure the app image `contacts-db-sample:latest` is available to cluster nodes (for Minikube this is often built in-cluster).
+- To run in Kubernetes, ensure the app image in `deployment.yaml` is available to cluster nodes.
+- Ensure `contacts-db-secret` exists in the target namespace before deploying app/database workloads.
 - The app-to-db dependency is represented through service DNS (`postgres-rw:5432`) rather than hardcoded Pod IPs.
+- The app now redacts DB credentials server-side before display/logging:
+  - UI prints a masked DB URL (password replaced with `***`).
+  - Startup logs also use the redacted URL.
+  - This avoids leaking raw credentials to browser responses and routine logs.
 
-## 11) Quick verification commands
+## 11) Ingress and managed TLS
+
+Files: `ingress.yaml`, `managed-certificate.yaml`
+
+- `Ingress` (`contacts-ingress`) routes `contacts.eetr.app` to service `contacts` on port `80`.
+- GCE annotations configure:
+  - ingress class (`kubernetes.io/ingress.class: gce`)
+  - global static IP (`kubernetes.io/ingress.global-static-ip-name: contacts-static-ip`)
+  - managed certificate binding (`networking.gke.io/managed-certificates: contacts-cert`)
+- `ManagedCertificate` (`contacts-cert`) requests TLS cert provisioning for `contacts.eetr.app`.
+
+## 12) Quick verification commands
 
 Use these to inspect what was applied and validate concept understanding:
 
@@ -126,7 +148,7 @@ Use these to inspect what was applied and validate concept understanding:
 kubectl apply -k .
 
 # List main resources
-kubectl get deploy,statefulset,svc,configmap,secret,pvc
+kubectl get deploy,statefulset,svc,configmap,secret,ingress,managedcertificate,pvc
 
 # Inspect app deployment config and env wiring
 kubectl describe deployment contacts
@@ -137,4 +159,11 @@ kubectl get pvc
 
 # Check generated Pod names and labels
 kubectl get pods --show-labels
+
+# Confirm secret expected by workloads exists
+kubectl get secret contacts-db-secret
+
+# Verify ingress and certificate status
+kubectl get ingress contacts-ingress
+kubectl get managedcertificate contacts-cert
 ```
