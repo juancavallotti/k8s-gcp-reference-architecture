@@ -14,6 +14,7 @@ Next.js 16 + Tailwind CSS contacts CRUD app using:
 For a repo-specific explanation of the Kubernetes setup and concepts used here, see:
 
 - `KUBERNETES_CONCEPTS.md`
+- `DEPLOYMENT_ARCHITECTURE.md` (dev/prod deployment topology + Mermaid diagrams)
 
 ### GKE + Cloud Build CI/CD (Terraform)
 
