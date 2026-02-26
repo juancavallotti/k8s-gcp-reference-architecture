@@ -230,6 +230,8 @@ Use Postgres in Docker/K8s by overriding env vars:
 
 This repo includes a dedicated overlay at `k8s/overlays/minikube` for local Kubernetes runs with SQLite + PVC and `NodePort` service access.
 
+### Option A: Kustomize
+
 1. Start minikube:
 
 ```bash
@@ -274,6 +276,50 @@ kubectl rollout status deployment/contacts --timeout=300s
 ```bash
 minikube service contacts --url
 ```
+
+### Option B: Helm
+
+1. Start minikube and build/load the image (same as above):
+
+```bash
+minikube start
+./scripts/minikube-build-and-load.sh
+```
+
+2. Deploy with Helm and run migrations:
+
+```bash
+./scripts/minikube-helm-apply-and-migrate.sh
+```
+
+Optional image overrides (same as build-and-load):
+
+```bash
+IMAGE_NAME=contacts-db-sample IMAGE_TAG=local ./scripts/minikube-helm-apply-and-migrate.sh
+```
+
+3. Get application URL:
+
+```bash
+minikube service contacts --url
+```
+
+### Helm chart (dev/prod values)
+
+The repo includes a Helm chart under `helm/contacts/` with:
+
+- **Committed**: `values.yaml` (defaults), `values-minikube.yaml` (local), and sample files `values-dev.sample.yaml`, `values-prod.sample.yaml`.
+- **Not committed** (in `.gitignore`): `values-dev.yaml` and `values-prod.yaml`, so environment-specific or sensitive overrides are not stored in the repo.
+
+To use Helm for dev or prod locally (or in CI), copy the sample and fill in:
+
+```bash
+cp helm/contacts/values-dev.sample.yaml helm/contacts/values-dev.yaml
+# edit helm/contacts/values-dev.yaml as needed
+helm upgrade --install contacts ./helm/contacts -f ./helm/contacts/values-dev.yaml --set image.tag=YOUR_TAG
+```
+
+For **Cloud Build** with the commented Helm deploy path: `values-dev.yaml` and `values-prod.yaml` are not in the repo, so CI must provide them (e.g. a step that fetches from Secret Manager and writes the file, or builds the values from substitutions into `helm/contacts/values-<env>.yaml` before the `helm upgrade` step).
 
 ## GitHub repository
 

@@ -1,0 +1,24 @@
+# Sample values for dev. Copy to values-dev.yaml and adjust.
+# Do not commit values-dev.yaml (gitignored).
+# Dev uses SQLite and LoadBalancer; no secrets in this file.
+
+replicaCount: 1
+
+image:
+  repository: us-west1-docker.pkg.dev/YOUR_PROJECT/YOUR_ARTIFACT_REPO/contacts-db-sample
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: LoadBalancer
+
+database:
+  engine: sqlite
+  sqlite:
+    url: "file:../data/contacts.db"
+
+persistence:
+  size: 64Mi
+
+ingress:
+  enabled: false

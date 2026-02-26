@@ -1,0 +1,34 @@
+# Sample values for prod. Copy to values-prod.yaml and fill in.
+# Do not commit values-prod.yaml (gitignored).
+# Prod uses Postgres; ensure contacts-db-secret exists in the cluster (POSTGRES_PASSWORD).
+# Replace placeholders (host, managed cert, static IP) as needed.
+
+replicaCount: 3
+
+image:
+  repository: us-west1-docker.pkg.dev/YOUR_PROJECT/YOUR_ARTIFACT_REPO/contacts-db-sample
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+
+database:
+  engine: postgres
+  postgres:
+    configMapName: contacts-db-config
+    secretName: contacts-db-secret
+    host: postgres-rw
+    port: "5432"
+    name: contacts
+    schema: public
+    user: postgres
+
+persistence:
+  size: 128Mi
+
+ingress:
+  enabled: true
+  host: contacts.example.com
+  managedCertificateName: contacts-cert
+  staticIPName: contacts-static-ip

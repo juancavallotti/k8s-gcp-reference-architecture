@@ -61,6 +61,53 @@ steps:
       - CLOUDSDK_COMPUTE_REGION=${_CLUSTER_REGION}
       - CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER_NAME}
 
+# ------------------------------------------------------------------------------
+# Alternative: deploy with Helm instead of Kustomize (commented out).
+# When enabling: comment out steps apply-manifests and run-migration above, and
+# ensure helm/contacts/values-<env>.yaml exists (gitignored; provide via Secret
+# Manager or a prior step that writes the file). Then uncomment the block below.
+# Builder: use an image with gcloud + helm (e.g. install helm in cloud-sdk step).
+# ------------------------------------------------------------------------------
+# - id: helm-upgrade
+#   name: gcr.io/google.com/cloudsdktool/cloud-sdk
+#   entrypoint: /bin/sh
+#   args:
+#     - -c
+#     - |
+#       curl -sSf https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+#       gcloud container clusters get-credentials ${_CLUSTER_NAME} --region ${_CLUSTER_REGION} --project ${PROJECT_ID}
+#       ENV=$$(echo ${_K8S_OVERLAY_PATH} | sed 's|.*/||')
+#       helm upgrade --install contacts ./helm/contacts \
+#         -f ./helm/contacts/values-$${ENV}.yaml \
+#         --set image.repository=${_ARTIFACT_REPO_PATH}/${_IMAGE_NAME} \
+#         --set image.tag=${SHORT_SHA}
+#   env:
+#     - CLOUDSDK_COMPUTE_REGION=${_CLUSTER_REGION}
+#     - CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER_NAME}
+#
+# - id: run-migration
+#   name: gcr.io/cloud-builders/kubectl
+#   entrypoint: /bin/sh
+#   args:
+#     - -c
+#     - |
+#       kubectl patch job contacts-migration --type=merge -p '{"spec":{"suspend":false}}'
+#       kubectl wait --for=condition=complete job/contacts-migration --timeout=300s
+#   env:
+#     - CLOUDSDK_COMPUTE_REGION=${_CLUSTER_REGION}
+#     - CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER_NAME}
+#
+# - id: rollout
+#   name: gcr.io/cloud-builders/kubectl
+#   args:
+#     - rollout
+#     - status
+#     - deployment/contacts
+#     - --timeout=300s
+#   env:
+#     - CLOUDSDK_COMPUTE_REGION=${_CLUSTER_REGION}
+#     - CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER_NAME}
+
 images:
   - ${_ARTIFACT_REPO_PATH}/${_IMAGE_NAME}:${SHORT_SHA}
 

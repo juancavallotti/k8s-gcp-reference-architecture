@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: contacts
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: contacts
+  template:
+    metadata:
+      labels:
+        app: contacts
+    spec:
+      containers:
+        - name: contacts
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 3000
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /api/healthcheck
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/healthcheck
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /api/healthcheck
+              port: 3000
+            initialDelaySeconds: 0
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          {{- if eq .Values.database.engine "sqlite" }}
+          env:
+            - name: APP_DB_ENGINE
+              value: sqlite
+            - name: SQLITE_DATABASE_URL
+              value: {{ .Values.database.sqlite.url | quote }}
+          volumeMounts:
+            - name: sqlite-data
+              mountPath: /app/prisma/data
+          {{- end }}
+          {{- if eq .Values.database.engine "postgres" }}
+          env:
+            - name: APP_DB_ENGINE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.database.postgres.configMapName }}
+                  key: APP_DB_ENGINE
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.database.postgres.configMapName }}
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.database.postgres.configMapName }}
+                  key: DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.database.postgres.configMapName }}
+                  key: DB_NAME
+            - name: DB_SCHEMA
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.database.postgres.configMapName }}
+                  key: DB_SCHEMA
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.database.postgres.configMapName }}
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.postgres.secretName }}
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DATABASE_URL
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?schema=$(DB_SCHEMA)"
+          {{- end }}
+      {{- if eq .Values.database.engine "sqlite" }}
+      volumes:
+        - name: sqlite-data
+          persistentVolumeClaim:
+            claimName: sqlite-pvc
+      {{- end }}

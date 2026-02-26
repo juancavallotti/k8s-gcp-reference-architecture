@@ -32,5 +32,7 @@ Image is ready in minikube: ${IMAGE}
 
 Suggested next steps:
   ./scripts/minikube-apply-and-migrate.sh
+  # or with Helm:
+  ./scripts/minikube-helm-apply-and-migrate.sh
   minikube service contacts --url
 EOF

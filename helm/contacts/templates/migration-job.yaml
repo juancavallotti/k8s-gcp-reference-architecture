@@ -1,0 +1,80 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: contacts-migration
+spec:
+  backoffLimit: 3
+  suspend: true
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      containers:
+        - name: migration
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - >
+              if [ "$APP_DB_ENGINE" = "postgres" ]; then
+                npx prisma migrate deploy --schema prisma/postgres/schema.prisma;
+              else
+                npx prisma migrate deploy --schema prisma/sqlite/schema.prisma;
+              fi
+          {{- if eq .Values.database.engine "sqlite" }}
+          env:
+            - name: APP_DB_ENGINE
+              value: sqlite
+            - name: SQLITE_DATABASE_URL
+              value: {{ .Values.database.sqlite.url | quote }}
+          volumeMounts:
+            - name: sqlite-data
+              mountPath: /app/prisma/data
+          {{- end }}
+          {{- if eq .Values.database.engine "postgres" }}
+          env:
+            - name: APP_DB_ENGINE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.database.postgres.configMapName }}
+                  key: APP_DB_ENGINE
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.database.postgres.configMapName }}
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.database.postgres.configMapName }}
+                  key: DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.database.postgres.configMapName }}
+                  key: DB_NAME
+            - name: DB_SCHEMA
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.database.postgres.configMapName }}
+                  key: DB_SCHEMA
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.database.postgres.configMapName }}
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.postgres.secretName }}
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DATABASE_URL
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?schema=$(DB_SCHEMA)"
+          {{- end }}
+      restartPolicy: OnFailure
+      {{- if eq .Values.database.engine "sqlite" }}
+      volumes:
+        - name: sqlite-data
+          persistentVolumeClaim:
+            claimName: sqlite-pvc
+      {{- end }}

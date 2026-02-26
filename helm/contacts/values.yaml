@@ -1,0 +1,36 @@
+# Default values for contacts chart (override per environment via -f values-<env>.yaml).
+
+replicaCount: 1
+
+image:
+  repository: us-west1-docker.pkg.dev/juancavallotti/eetr-artifacts/contacts-db-sample
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+
+# database.engine: "sqlite" | "postgres"
+database:
+  engine: sqlite
+  # SQLite (minikube/dev)
+  sqlite:
+    url: "file:../data/contacts.db"
+  # Postgres (prod) - configMap keys; secret is external (contacts-db-secret)
+  postgres:
+    configMapName: contacts-db-config
+    secretName: contacts-db-secret
+    host: postgres-rw
+    port: "5432"
+    name: contacts
+    schema: public
+    user: postgres
+
+persistence:
+  size: 64Mi
+
+ingress:
+  enabled: false
+  host: ""
+  managedCertificateName: ""
+  staticIPName: ""

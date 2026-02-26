@@ -1,0 +1,7 @@
+apiVersion: v2
+name: contacts
+description: Contacts app - deployment, service, migration job; supports SQLite (minikube/dev) and Postgres (prod).
+type: application
+version: 0.1.0
+appVersion: "1.0"
+maintainers: []

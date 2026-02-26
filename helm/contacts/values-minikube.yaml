@@ -1,0 +1,23 @@
+# Minikube: SQLite, NodePort, image from local daemon (Never pull)
+# Committed; safe for local use.
+
+replicaCount: 1
+
+image:
+  repository: contacts-db-sample
+  tag: local
+  pullPolicy: Never
+
+service:
+  type: NodePort
+
+database:
+  engine: sqlite
+  sqlite:
+    url: "file:../data/contacts.db"
+
+persistence:
+  size: 64Mi
+
+ingress:
+  enabled: false

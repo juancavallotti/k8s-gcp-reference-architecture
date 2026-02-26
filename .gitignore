@@ -57,3 +57,7 @@ override.tf.json
 *_override.tf.json
 crash.log
 
+# helm env-specific values (copy from values-*.sample.yaml; do not commit)
+helm/contacts/values-dev.yaml
+helm/contacts/values-prod.yaml
+

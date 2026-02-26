@@ -1,0 +1,13 @@
+{{- if eq .Values.database.engine "postgres" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.database.postgres.configMapName }}
+data:
+  APP_DB_ENGINE: "postgres"
+  DB_HOST: {{ .Values.database.postgres.host | quote }}
+  DB_PORT: {{ .Values.database.postgres.port | quote }}
+  DB_NAME: {{ .Values.database.postgres.name | quote }}
+  DB_SCHEMA: {{ .Values.database.postgres.schema | quote }}
+  POSTGRES_USER: {{ .Values.database.postgres.user | quote }}
+{{- end }}
