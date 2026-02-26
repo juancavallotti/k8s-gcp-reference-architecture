@@ -352,6 +352,10 @@ git branch -M main
 git push -u origin main
 ```
 
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
+
 ### Contact
 
 Want to work with me? [Call my agent](https://juancavallotti.com/ai-assistant).
