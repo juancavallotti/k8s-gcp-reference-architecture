@@ -1,4 +1,4 @@
-# GCP + K8s Reference Architectur
+# GCP + K8s Reference Architecture
 
 ## Sample App: Contacts Database
 
