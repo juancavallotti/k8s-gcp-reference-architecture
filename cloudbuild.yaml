@@ -31,7 +31,7 @@ steps:
     args:
       - apply
       - -k
-      - .
+      - k8s
     env:
       - CLOUDSDK_COMPUTE_REGION=${_CLUSTER_REGION}
       - CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER_NAME}
