@@ -226,6 +226,55 @@ Use Postgres in Docker/K8s by overriding env vars:
 -e POSTGRES_DATABASE_URL="postgresql://postgres:example@postgres-rw:5432/postgres?schema=public"
 ```
 
+## Minikube
+
+This repo includes a dedicated overlay at `k8s/overlays/minikube` for local Kubernetes runs with SQLite + PVC and `NodePort` service access.
+
+1. Start minikube:
+
+```bash
+minikube start
+```
+
+2. Build and load image into minikube:
+
+```bash
+./scripts/minikube-build-and-load.sh
+```
+
+Optional image overrides:
+
+```bash
+IMAGE_NAME=contacts-db-sample IMAGE_TAG=local ./scripts/minikube-build-and-load.sh
+```
+
+3. Apply minikube manifests:
+
+```bash
+kubectl apply -k k8s/overlays/minikube
+```
+
+4. Point deployment and migration job to local image tag:
+
+```bash
+kubectl set image deployment/contacts contacts=contacts-db-sample:local
+kubectl set image job/contacts-migration migration=contacts-db-sample:local
+```
+
+5. Run migration job and wait:
+
+```bash
+kubectl patch job contacts-migration --type=merge -p '{"spec":{"suspend":false}}'
+kubectl wait --for=condition=complete job/contacts-migration --timeout=300s
+kubectl rollout status deployment/contacts --timeout=300s
+```
+
+6. Get application URL:
+
+```bash
+minikube service contacts --url
+```
+
 ## GitHub repository
 
 Target remote:

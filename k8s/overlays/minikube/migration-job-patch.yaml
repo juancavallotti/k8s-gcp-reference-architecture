@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: contacts-migration
+spec:
+  template:
+    spec:
+      containers:
+        - name: migration
+          env:
+            - name: APP_DB_ENGINE
+              value: sqlite
+            - name: SQLITE_DATABASE_URL
+              value: file:../data/contacts.db
+          volumeMounts:
+            - name: sqlite-data
+              mountPath: /app/prisma/data
+      volumes:
+        - name: sqlite-data
+          persistentVolumeClaim:
+            claimName: sqlite-pvc
